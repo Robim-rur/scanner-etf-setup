@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
 
 st.set_page_config(layout="wide")
 
@@ -44,11 +43,11 @@ def dmi_adx(df, period=14):
     low = df['Low']
     close = df['Close']
 
-    plus_dm = high.diff()
-    minus_dm = low.diff().abs()
+    up_move = high.diff()
+    down_move = low.shift() - low
 
-    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0.0)
-    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0.0)
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
 
     tr1 = high - low
     tr2 = (high - close.shift()).abs()
@@ -68,8 +67,23 @@ def dmi_adx(df, period=14):
 
 
 def baixar_dados(ticker, interval, period="18mo"):
-    df = yf.download(ticker, interval=interval, period=period, auto_adjust=False, progress=False)
+    df = yf.download(
+        ticker,
+        interval=interval,
+        period=period,
+        auto_adjust=False,
+        progress=False
+    )
+
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    # CORREÇÃO PARA COLUNAS MULTIINDEX (Streamlit Cloud)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df = df[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
     df.dropna(inplace=True)
+
     return df
 
 
@@ -93,6 +107,7 @@ def analisar_ativo(nome, ticker):
     diario["D"] = d
 
     plus_di, minus_di, adx = dmi_adx(diario)
+
     diario["DIp"] = plus_di
     diario["DIn"] = minus_di
     diario["ADX"] = adx
@@ -111,7 +126,7 @@ def analisar_ativo(nome, ticker):
     cond_adx = d1["ADX"] > 20 and d1["ADX"] > d2["ADX"]
     cond_estoc = d1["K"] > d1["D"]
 
-    # candle de sinal simples e objetivo
+    # candle de sinal
     cond_candle = d1["Close"] > d2["High"]
 
     # =============================
@@ -138,7 +153,7 @@ def analisar_ativo(nome, ticker):
             "Valor_ordem": None
         }
 
-    preco_entrada = round(d1["High"] + 0.01, 2)
+    preco_entrada = round(float(d1["High"]) + 0.01, 2)
 
     risco_total = CAPITAL * RISCO_POR_TRADE
     risco_por_cota = preco_entrada * STOP_PERCENTUAL
@@ -169,7 +184,7 @@ def analisar_ativo(nome, ticker):
 # INTERFACE
 # =============================
 
-st.title("Scanner de ETFs – Setup do Roberson")
+st.title("Scanner de ETFs – Setup operacional")
 
 st.markdown("""
 Ativos monitorados:
