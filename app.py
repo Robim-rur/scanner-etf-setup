@@ -198,4 +198,3 @@ if st.button("Rodar scanner agora"):
     st.write("Risco por trade: 1%")
     st.write("Stop ETF: 3%")
     st.write("Apenas 1 posição simultânea")
-
